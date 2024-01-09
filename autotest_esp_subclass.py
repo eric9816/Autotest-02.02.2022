@@ -16,12 +16,12 @@ from sixgill.pipesim import Model
 from sixgill.definitions import ModelComponents, Parameters, Constants, Units, ProfileVariables
 import copy
 import numpy as np
-from unifloc.pvt.fluid_flow import FluidFlow
+from ffmt.pvt.adapter import FluidFlow
 from unifloc.well.esp_well import EspWell
 from unifloc.equipment.esp import Esp
 from copy import deepcopy
 from unifloc.tools import units_converter as uc
-from NEW_autotest.autotest_class import Autotest
+from autotest_class import Autotest
 
 
 class AutotestESP(Autotest):
@@ -167,12 +167,13 @@ class AutotestESP(Autotest):
             except IndexError:
                 continue
 
-            # Сохраним значения аргументов
+            # if not calc_options['scenario']:
+                # Сохраним значения аргументов
             results_df.loc[i, keys] = data[i, :]
             results_df.loc[i, 'Density_inversion_flag'] = results_dict['density_inversion']
 
-            if calc_type == 'esp':
-                results_df.loc[i, 'q_mix'] = results_dict['uniflocpy_results']['q_mix']
+            # if calc_type == 'esp':
+            #     results_df.loc[i, 'q_mix'] = results_dict['uniflocpy_results']['q_mix']
 
             # Сохраним результаты
             results_df.loc[i, 'Error'] = [results_dict['error_results']]
@@ -184,8 +185,14 @@ class AutotestESP(Autotest):
         # Приведем результаты к удобному для вывода формату
         results_df.dropna(how='all', inplace=True)
 
+        # if calc_options['scenario']:
+        #     # scenario = pd.DataFrame(куы)
+        #     return results_df
+
         if len(results_df) > 0:
             results_df = self.reformat_results(results_df, calc_type)
+            if calc_options['scenario']:
+                return results_df
             results_df.to_excel(result_path)
 
         return results_df
@@ -542,5 +549,7 @@ class AutotestESP(Autotest):
         if calc_options['plot_results']:
             self.plot_results(uniflocpy_results, pipesim_results_f, calc_type)
 
+        # if calc_options['scenario']:
+        #     return error_results
         return {'pipesim_results': pipesim_results_f, 'uniflocpy_results': uniflocpy_results,
                 'error_results': error_results, 'density_inversion': flag}

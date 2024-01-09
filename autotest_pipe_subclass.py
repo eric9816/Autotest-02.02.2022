@@ -17,11 +17,11 @@ from sixgill.definitions import ModelComponents, Constants, Units, ProfileVariab
 import copy
 import numpy as np
 from unifloc.common.trajectory import Trajectory
-from unifloc.pvt.fluid_flow import FluidFlow
+from ffmt.pvt.adapter import FluidFlow
 from unifloc.pipe.pipeline import Pipeline
 from copy import deepcopy
 from unifloc.tools import units_converter as uc
-from NEW_autotest.autotest_class import Autotest
+from autotest_class import Autotest
 
 class AutotestPipe(Autotest):
 
@@ -164,10 +164,11 @@ class AutotestPipe(Autotest):
 
         # Приведем результаты к удобному для вывода формату
         results_df.dropna(how='all', inplace=True)
-
-        if len(results_df) > 0:
-            results_df = self.reformat_results(results_df, calc_type)
-            results_df.to_excel(result_path)
+        results_df = self.reformat_results(results_df, calc_type)
+        if not calc_options['scenario']:
+            if len(results_df) > 0:
+                # results_df = self.reformat_results(results_df, calc_type)
+                results_df.to_excel(result_path)
 
         return results_df
 
@@ -190,7 +191,7 @@ class AutotestPipe(Autotest):
             profile_variables = self.profile_variables
 
         q_liq = fluid_data['q_fluid']
-        wct = fluid_data['wct']
+        wct = fluid_data['pvt_model_data']['black_oil']['wct']
 
         if calculation_type.lower() == 'pipe':
 
@@ -265,8 +266,8 @@ class AutotestPipe(Autotest):
                                        data=pipe.distributions['lambda_l']),
                 'n_re': pd.DataFrame(index=pipe.distributions['depth'],
                                      data=pipe.distributions['n_re']),
-                'angle': pd.DataFrame(index=pipe.distributions['depth'],
-                                     data=pipe.distributions['angle'])
+                # 'angle': pd.DataFrame(index=pipe.distributions['depth'],
+                #                      data=pipe.distributions['angle'])
             }
 
     def calc_model_pipesim(self,
@@ -294,17 +295,18 @@ class AutotestPipe(Autotest):
         # Параметры для создания модели
         well_name = 'Test well'
         qliq = fluid_data_new['q_fluid'] * 86400
-        wct = fluid_data_new['wct'] * 100
+
 
         pvt_model_data = fluid_data_new['pvt_model_data']
         black_oil_model = pvt_model_data['black_oil']
 
+        wct = black_oil_model['wct'] * 100
         gamma_oil = black_oil_model['gamma_oil']
         dod = gamma_oil * 1000
         gamma_water = black_oil_model['gamma_wat']
         gamma_gas = black_oil_model['gamma_gas']
         t_res = ambient_temperature_data["T"][1] - 273.15
-        gor = black_oil_model['rp']
+        gor = black_oil_model['phase_ratio']['value']
         h_cas = pipe_data['casing']['bottom_depth']
         d_cas = pipe_data['casing']['d'] * 1000
         roughness_cas = pipe_data['casing']['roughness'] * 1000

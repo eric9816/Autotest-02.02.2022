@@ -112,6 +112,11 @@ class Autotest:
                                   ProfileVariables.HEAT_CAPACITY_WATER_INSITU,
                                   ProfileVariables.HEAT_CAPACITY_OIL_INSITU,
                                   ProfileVariables.CASING_GAS_PRESSURE,
+                                  ProfileVariables.MASS_FLOWRATE_OIL_INSITU,
+                                  ProfileVariables.MASS_FLOWRATE_GAS_INSITU,
+                                  ProfileVariables.MASS_FLOWRATE_WATER_INSITU,
+                                  ProfileVariables.SONIC_VELOCITY_IN_FLUID,
+                                  ProfileVariables.TEMPERATURE_GRADIENT_JOULE_THOMSON,
                                   ]
 
         self.results_mapping = {'bo': ProfileVariables.OIL_FORMATION_VOLUME_FACTOR,
@@ -205,9 +210,12 @@ class Autotest:
                 error = np.trapz(relative_error, x=DEPTH) / abs(DEPTH[0] - DEPTH[-1])
             # Относительная ошибка
             else:
-                error = abs(uniflocpy_array[uniflocpy_array.index.notnull()].mean().values[0] -
-                            pipesim_array[pipesim_array.index.notnull()].mean().values[0]) / \
-                        abs(pipesim_array[pipesim_array.index.notnull()].mean().values[0])
+                try:
+                    error = abs(uniflocpy_array[uniflocpy_array.index.notnull()].mean().values[0] -
+                                pipesim_array[pipesim_array.index.notnull()].mean().values[0]) / \
+                            abs(pipesim_array[pipesim_array.index.notnull()].mean().values[0])
+                except BaseException:
+                    error = 0
         elif isinstance(uniflocpy_array, list) and isinstance(pipesim_array, list):
             uniflocpy_array = np.array(uniflocpy_array)
             pipesim_array = np.array(pipesim_array)
@@ -310,7 +318,8 @@ class Autotest:
                               pipe_data: dict,
                               equipment_data: dict,
                               limited_pars: dict,
-                              freq_q_ag: float = None) -> \
+                              freq_q_ag: float = None,
+                              **kwargs) -> \
             Tuple[Union[float, Any], Union[float, Any], str, dict, dict, Optional[dict]]:
         """
         Функция для обновления значений переменных соответственно значениям латинского гиперкуба
@@ -454,14 +463,18 @@ class Autotest:
         table_model_data : обновленный словарь с табличной PVT
         """
         pressure_array = uc.convert_pressure(pipesim_results.profile[pipesim_results.cases[0]]
-                                             ['Pressure'], 'bar', 'pa')[3:]
-
+                                             ['Pressure'], 'bar', 'pa')
+        # pressure_array = uc.convert_pressure(pipesim_results.profile[pipesim_results.cases[0]]
+        #                                      ['Pressure'], 'bar', 'pa')[3:]
         for i in range(len(pars)):
             if pars[i] == 'pb':
                 data = list(uc.convert_pressure(pipesim_results.profile[pipesim_results.cases[0]]
-                                                [self.results_mapping[pars[i]]], 'bar', 'pa'))[3:]
+                                                [self.results_mapping[pars[i]]], 'bar', 'pa'))
+                # data = list(uc.convert_pressure(pipesim_results.profile[pipesim_results.cases[0]]
+                #                                 [self.results_mapping[pars[i]]], 'bar', 'pa'))[3:]
             else:
-                data = pipesim_results.profile[pipesim_results.cases[0]][self.results_mapping[pars[i]]][3:]
+                # data = pipesim_results.profile[pipesim_results.cases[0]][self.results_mapping[pars[i]]][3:]
+                data = pipesim_results.profile[pipesim_results.cases[0]][self.results_mapping[pars[i]]]
 
             df = pd.DataFrame(index=pressure_array, data=data, columns=[pars[i]])
             table_model_data.update({pars[i]: df})
@@ -621,14 +634,14 @@ class Autotest:
 
         del df['Error']
         return df
-
     def save_results(self,
                      uniflocpy_results=None,
                      pipesim_results=None,
                      error_results=None,
                      file_path=None,
                      calc_type: str = 'pipe',
-                     equipment_data = None):
+                     equipment_data = None,
+                     **kwargs):
         """
         Функция для сохранения результатов в Excel
 
@@ -1101,7 +1114,6 @@ class Autotest:
             if equipment_data['packer']:
                 model.add(modelcomponents.PACKER, 'Packer 1', context=well_name,
                           parameters={Parameters.Packer.TOPMEASUREDDEPTH: h_tub - 1})
-
         # Установка гидравлической корреляции
         if hydr_corr_type.lower() == 'beggsbrill':
             model.sim_settings.global_flow_correlation(
@@ -1123,6 +1135,17 @@ class Autotest:
                      constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
                  Parameters.FlowCorrelation.Multiphase.Horizontal.CORRELATION:
                      constants.MultiphaseFlowCorrelation.BakerJardine.BEGGSBRILLREVISED})
+        elif hydr_corr_type == 'gregory':
+            model.sim_settings.global_flow_correlation(
+                {Parameters.FlowCorrelation.SWAPANGLE: 90,
+                 Parameters.FlowCorrelation.Multiphase.Vertical.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.NEOTEC,
+                 Parameters.FlowCorrelation.Multiphase.Vertical.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.Neotec.GREGORY,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.BakerJardine.BEGGSBRILLREVISED})
         elif hydr_corr_type.lower() == 'hagedornbrown':
             model.sim_settings.global_flow_correlation(
                 {Parameters.FlowCorrelation.SWAPANGLE: 0,
@@ -1130,6 +1153,28 @@ class Autotest:
                      constants.MultiphaseFlowCorrelationSource.TULSA,
                  Parameters.FlowCorrelation.Multiphase.Vertical.CORRELATION:
                      constants.MultiphaseFlowCorrelation.TulsaLegacy.HAGEDORNBROWN_ORIGINAL,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.BakerJardine.BEGGSBRILLREVISED})
+        elif hydr_corr_type.lower() == 'unifiedtuffp':
+            model.sim_settings.global_flow_correlation(
+                {
+                 Parameters.FlowCorrelation.Multiphase.Vertical.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.TUFFPUNIFIED,
+                 Parameters.FlowCorrelation.Multiphase.Vertical.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.TUFFPUnified.TUFFPV20111_2PHASE,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
+                 Parameters.FlowCorrelation.Multiphase.Horizontal.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.BakerJardine.BEGGSBRILLREVISED})
+        elif hydr_corr_type.lower() == 'orkiszewski':
+            model.sim_settings.global_flow_correlation(
+                {
+                 Parameters.FlowCorrelation.Multiphase.Vertical.SOURCE:
+                     constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
+                 Parameters.FlowCorrelation.Multiphase.Vertical.CORRELATION:
+                     constants.MultiphaseFlowCorrelation.BakerJardine.DUNSROS,
                  Parameters.FlowCorrelation.Multiphase.Horizontal.SOURCE:
                      constants.MultiphaseFlowCorrelationSource.BAKER_JARDINE,
                  Parameters.FlowCorrelation.Multiphase.Horizontal.CORRELATION:
@@ -1166,6 +1211,7 @@ class Autotest:
                       t_res=None,
                       p_gas_inj=None,
                       equipment_data=None,
+                      **kwargs
                       ):
 
         if 'gl_system' in equipment_data:
