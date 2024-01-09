@@ -22,7 +22,7 @@ from unifloc.tools import units_converter as uc
 from scipy.interpolate import interp1d
 from copy import deepcopy
 import math as mt
-from NEW_autotest.autotest_class import Autotest
+from autotest_class import Autotest
 
 
 class AutotestGasLift(Autotest):
@@ -216,6 +216,7 @@ class AutotestGasLift(Autotest):
 
         """
 
+        # pfl = uc.convert_pressure(pfl, 'pa', 'atm')
         # Подготовка границ для генерации латинского гиперкуба
         keys = list(pars_limits.keys())
         xlimits = [pars_limits[par] for par in keys]
@@ -296,6 +297,9 @@ class AutotestGasLift(Autotest):
         results_df_ps.dropna(how='all', inplace=True)
         results_df_up.dropna(how='all', inplace=True)
         results_df_err.dropna(how='all', inplace=True)
+
+        if calc_options['scenario']:
+            return results_df_err
 
         with pd.ExcelWriter(result_path) as writer:
             results_df_ps.to_excel(writer, sheet_name='Pipesim')
@@ -420,7 +424,8 @@ class AutotestGasLift(Autotest):
                            temperature_option: str = 'CONST',
                            profile_variables: list = None,
                            ambient_temperature_data=None,
-                           p_gas_inj=None):
+                           p_gas_inj=None,
+                           calc_options=None):
 
         fluid_data_new = deepcopy(fluid_data)
 
@@ -497,6 +502,12 @@ class AutotestGasLift(Autotest):
                            t_res=t_res,
                            p_gas_inj=p_gas_inj)
 
+        if self.hydr_corr_type == "orkiszewski":
+            current_hydr_corr_type = "dunsros"
+        elif self.hydr_corr_type == "gregory":
+            current_hydr_corr_type = "Gray"
+        else:
+            current_hydr_corr_type = self.hydr_corr_type
         parameters = self.pipesim_parameters(wct=wct,
                                              model=model,
                                              black_oil_model=black_oil_model,
@@ -508,7 +519,7 @@ class AutotestGasLift(Autotest):
                                              ambient_temperature_data=ambient_temperature_data,
                                              constants=Constants,
                                              equipment_data=equipment_data,
-                                             hydr_corr_type=self.hydr_corr_type,
+                                             hydr_corr_type=current_hydr_corr_type,
                                              p=pfl,
                                              qliq=qliq,
                                              h_tub=h_tub,
@@ -681,7 +692,8 @@ class AutotestGasLift(Autotest):
                                                                         freq_q_ag=qinj_uniflocpy,
                                                                         temperature_option=temperature_option,
                                                                         ambient_temperature_data=ambient_temperature_data,
-                                                                        p_gas_inj=p_gas_inj)
+                                                                        p_gas_inj=p_gas_inj,
+                                                                        calc_options=calc_options)
 
         # Приведем результаты Pipesim к единому с UniflocPy формату
 
